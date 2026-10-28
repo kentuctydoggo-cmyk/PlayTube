@@ -103,6 +103,15 @@ if (empty($error)) {
 	        if (!empty($file_upload['filename'])) {
 	            $thumbnail = PT_Secure($file_upload['filename']);
 	        }
+	        else{
+	        	// Never report success while silently keeping the old placeholder.
+	        	$data = array(
+	        		'status' => 400,
+	        		'message' => $error_icon . 'Thumbnail could not be saved. Please try again.'
+	        	);
+	        	echo json_encode($data);
+	        	exit();
+	        }
 	    }
 
 	    // ******************************

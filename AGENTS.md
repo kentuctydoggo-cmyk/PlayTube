@@ -44,6 +44,15 @@ it with `password_hash` on first successful sign-in).
 - Uploads are written to `upload/` and `assets/import/`; the entrypoint chowns them to
   `www-data` because the bind mount is root-owned. It also `chmod a+rx` the document root
   so Apache can read `.htaccess`.
+- **`upload/photos/YYYY/MM` must stay writable by `www-data`.** Avatars, cover images and
+  video thumbnails are written into the current month directory by PHP. If that directory
+  ends up owned by `root` (e.g. a file was copied in from the host), uploads fail silently
+  and the video keeps `upload/photos/thumbnail.jpg` (the grey "no thumbnail" placeholder).
+  The entrypoint `chown -R` fixes it on every container start; to fix a live container run
+  `docker compose -f docker-compose.base44.yml exec -u root web chown -R www-data:www-data upload`.
+- `php.ini` raises `memory_limit` to 512M because `PT_Resize_Crop_Image` loads the whole
+  source image into GD to crop 1920x1080 thumbnails; the 128M default fails on large
+  screenshots. `php.ini` is mounted read-only, so restart `web` after editing it.
 - Payment gateways, SMTP and social-login credentials are in-app admin settings (stored in
   the `config` table), not environment variables. No external secret is required to boot.
 - **Upload limits are `config` rows, not just php.ini.** `max_upload` is the per-file limit
