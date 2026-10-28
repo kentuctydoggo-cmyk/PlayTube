@@ -46,6 +46,13 @@ it with `password_hash` on first successful sign-in).
   so Apache can read `.htaccess`.
 - Payment gateways, SMTP and social-login credentials are in-app admin settings (stored in
   the `config` table), not environment variables. No external secret is required to boot.
+- **Upload limits are `config` rows, not just php.ini.** `max_upload` is the per-file limit
+  (seeded 10GB) and `max_upload_all_users` / `max_upload_free_users` / `max_upload_pro_users`
+  are per-user storage quotas where `0` means unlimited (seeded `0`). `chunk_size` (24MB)
+  keeps the plupload chunk requests under `post_max_size`; `php.ini` allows 10GB per request.
+  The admin panel's Upload Settings page writes the same rows. Changing `playtube.sql` only
+  affects a fresh import — an existing database needs
+  `UPDATE config SET value='…' WHERE name='…'` (or the admin panel) to change limits.
 
 ## Verifying
 
