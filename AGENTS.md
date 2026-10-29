@@ -16,8 +16,9 @@ docker compose -f docker-compose.base44.yml up -d --build   # db, db-setup (one-
 - `db` is MySQL 5.7 (`base44playtube` / `base44playtube`, root password `base44root`).
 - `db-setup` imports `playtube.sql` once and seeds the admin account, then exits.
 
-Admin login: `admin` / `PlayTube!Admin1` (stored as legacy SHA1; the login flow re-hashes
-it with `password_hash` on first successful sign-in).
+Admin login: `admin@gmail.com` / `Vazquez7689@` (username `admin`; the sandbox database stores
+it as a `password_hash` hash, fresh seeds as legacy SHA1 that the login flow re-hashes on
+first successful sign-in).
 
 ## Non-obvious things
 
@@ -53,6 +54,12 @@ it with `password_hash` on first successful sign-in).
 - `php.ini` raises `memory_limit` to 512M because `PT_Resize_Crop_Image` loads the whole
   source image into GD to crop 1920x1080 thumbnails; the 128M default fails on large
   screenshots. `php.ini` is mounted read-only, so restart `web` after editing it.
+- **The 18+ Section page is a custom addition** (`sources/adult/content.php` +
+  `themes/youplay/layout/adult/content.html`, linked from the sidebar in
+  `themes/youplay/layout/container.html`). It lists public, approved long-form videos whose
+  `videos.age_restriction` is `2` ("Only 18+" in the upload/edit form); `1` means all ages.
+  The route resolves through the `.htaccess` catch-all, so no rewrite rule is needed. The
+  label is hardcoded in the template rather than added as a `langs` row.
 - Payment gateways, SMTP and social-login credentials are in-app admin settings (stored in
   the `config` table), not environment variables. No external secret is required to boot.
 - **Upload limits are `config` rows, not just php.ini.** `max_upload` is the per-file limit

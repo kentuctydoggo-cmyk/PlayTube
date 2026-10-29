@@ -279,6 +279,7 @@
                   (data.page == 'movies') ? $('#movies_menu_').addClass('active') : $('#movies_menu_').removeClass('active');
                   (data.page == 'stock') ? $('#stock_menu_').addClass('active') : $('#stock_menu_').removeClass('active');
                   (data.page == 'popular_channels') ? $('#popular_channels_menu_').addClass('active') : $('#popular_channels_menu_').removeClass('active');
+                  (data.page == 'adult') ? $('#adult_menu_').addClass('active') : $('#adult_menu_').removeClass('active');
                   (data.page == 'shorts') ? $('#shorts_menu_').addClass('active') : $('#shorts_menu_').removeClass('active');
 
                   window.history.pushState({state:'new'},'', data.url);
@@ -520,6 +521,15 @@
                </a>
             </li>
             <?php } ?>
+            <li class="hide-from-mobile <?php echo ($pt->page == 'adult') ? 'active': '';?>" id="adult_menu_">
+               <a href="{{LINK adult}}" data-load="?link1=adult">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                     <rect x="2.5" y="4.5" width="19" height="15" rx="3"></rect>
+                     <text x="12" y="15.4" text-anchor="middle" font-size="7.5" font-weight="700" font-family="inherit" fill="currentColor" stroke="none">18+</text>
+                  </svg>
+                  <span>18+ Section</span>
+               </a>
+            </li>
             <?php if ($pt->config->shorts_system == 'on') { ?>
             <li class="hide-from-mobile <?php echo ($pt->page == 'shorts') ? 'active': '';?>" id="shorts_menu_">
                <a href="{{LINK shorts}}" data-load="?link1=shorts&id=">
