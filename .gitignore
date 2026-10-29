@@ -4,3 +4,7 @@ node_modules/
 
 /config.php
 assets/import
+
+# Uploaded media is served from disk and can be many GB; never commit it.
+upload/videos/
+upload/timeline/
