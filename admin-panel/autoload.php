@@ -73,6 +73,7 @@ $pages = array(
     'manage-activities',
     'live',
     'ffmpeg',
+    'mux',
     'video_settings',
     'newsletters',
     'ads-settings',
@@ -575,8 +576,8 @@ $old_notifications = $db->where('recipient_id',0)->where('admin',1)->where('seen
                         </a>
                     </li>
                     <?php } ?>
-                    <?php if ($pt->user->admin == 1 || CheckHaveMultiPermission(['general-settings','site-settings','ffmpeg','video_settings','email-settings','social-login','live', 'upload-to-storage', 'cronjob_settings'])) { ?>
-                    <li <?php echo ($page == 'general-settings' || $page == 'site-settings' || $page == 'upload-to-storage' || $page == 'email-settings' || $page == 'social-login' || $page == 's3' || $page == 'live' || $page == 'ffmpeg' || $page == 'video_settings' || $page == 'cronjob_settings') ? 'class="open"' : ''; ?>>
+                    <?php if ($pt->user->admin == 1 || CheckHaveMultiPermission(['general-settings','site-settings','ffmpeg','mux','video_settings','email-settings','social-login','live', 'upload-to-storage', 'cronjob_settings'])) { ?>
+                    <li <?php echo ($page == 'general-settings' || $page == 'site-settings' || $page == 'upload-to-storage' || $page == 'email-settings' || $page == 'social-login' || $page == 's3' || $page == 'live' || $page == 'ffmpeg' || $page == 'mux' || $page == 'video_settings' || $page == 'cronjob_settings') ? 'class="open"' : ''; ?>>
                         <a href="#">
                             <span class="nav-link-icon">
                                 <i class="material-icons">settings</i>
@@ -597,6 +598,11 @@ $old_notifications = $db->where('recipient_id',0)->where('admin',1)->where('seen
                             <?php if ($pt->user->admin == 1 || CheckHavePermission('ffmpeg')) { ?>
                             <li>
                                 <a <?php echo ($page == 'ffmpeg' || $page == 'upload-to-storage') ? 'class="active"' : ''; ?> href="<?php echo PT_LoadAdminLinkSettings('ffmpeg'); ?>" data-ajax="?path=ffmpeg">Import & Upload Configuration</a>
+                            </li>
+                            <?php } ?>
+                            <?php if ($pt->user->admin == 1 || CheckHavePermission('mux')) { ?>
+                            <li>
+                                <a <?php echo ($page == 'mux') ? 'class="active"' : ''; ?> href="<?php echo PT_LoadAdminLinkSettings('mux'); ?>" data-ajax="?path=mux">Mux Video Setup</a>
                             </li>
                             <?php } ?>
                             <?php if ($pt->user->admin == 1 || CheckHavePermission('video_settings')) { ?>

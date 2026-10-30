@@ -48,4 +48,7 @@ chmod a+rx "$APP_ROOT"
 mkdir -p "$APP_ROOT/upload/photos" "$APP_ROOT/upload/videos" "$APP_ROOT/assets/import"
 chown -R www-data:www-data "$APP_ROOT/upload" "$APP_ROOT/assets/import"
 
+# Additive Mux schema (CREATE TABLE IF NOT EXISTS only). Never blocks Apache startup.
+php -f "$APP_ROOT/docker/base44/migrate.php" || echo "warning: mux schema migration failed" >&2
+
 exec "$@"

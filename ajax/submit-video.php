@@ -9,6 +9,9 @@ $getID3   = new getID3;
 $featured = ($user->is_pro == 1) ? 1 : 0;
 $filesize = 0;
 $trailer = '';
+// A video that arrived through Mux is published from the tracking row its upload created.
+$is_mux  = !empty($_POST['mux_upload_id']);
+$mux_row = null;
 if (PT_IsAdmin() && !empty($_POST['is_movie']) && $_POST['is_movie'] == 1) {
     if (empty($_POST['title']) || empty($_POST['description']) || empty($_FILES['thumbnail']) || empty($_POST['stars']) || empty($_POST['producer']) || empty($_POST['country']) || empty($_POST['quality']) || empty($_POST['rating']) || !is_numeric($_POST['rating']) || $_POST['rating'] < 1 || $_POST['rating'] > 10 || empty($_POST['release']) || empty($_POST['category']) || !in_array($_POST['category'], array_keys($pt->movies_categories))) {
         $error = $error_icon . $lang->please_check_details;
@@ -39,7 +42,7 @@ else{
     if (empty($_POST['title']) || empty($_POST['description']) || empty($_POST['tags']) || empty($_FILES['thumbnail'])) {
         $error = $lang->please_check_details;
     }
-    if (empty($_POST['video-location'])) {
+    if (empty($_POST['video-location']) && !$is_mux) {
         $error = $lang->video_not_found_please_try_again;
     }
 
@@ -80,15 +83,42 @@ if (!empty($_POST['date'])) {
 if (!empty($_POST['privacy']) && $_POST['privacy'] == 3 && (empty($_POST['date']) || empty($_POST['hour']) || !in_array($_POST['hour'], array_keys($pt->config->hours)))) {
     $error = $lang->wrong_date_format;
 }
+if (empty($error) && $is_mux) {
+    $mux_row = PT_MuxRowBy('upload_id', PT_Secure($_POST['mux_upload_id']));
+    if (empty($mux_row) || (int) $mux_row->user_id !== (int) $pt->user->id) {
+        $error   = 'That Mux upload could not be found. Please upload the video again.';
+        $mux_row = null;
+    } elseif ($mux_row->status === 'failed') {
+        $error = ($mux_row->error_message !== '') ? $mux_row->error_message : 'This upload failed on Mux. Please try again.';
+    } elseif (!empty($mux_row->video_id)) {
+        // Retry / double submit: return the video that already exists instead of a duplicate.
+        $existing_video = $db->where('video_id', $mux_row->video_id)->getOne(T_VIDEOS);
+        if (!empty($existing_video)) {
+            $existing_url = PT_Link('watch/' . $existing_video->video_id);
+            if ($pt->config->seo_link == 'on') {
+                $existing_url = PT_Link('watch/' . PT_Slug($existing_video->title, $existing_video->video_id));
+            }
+            echo json_encode(array('status' => 200, 'video_id' => $existing_video->video_id, 'link' => $existing_url, 'duplicate' => true));
+            exit();
+        }
+    }
+}
 if (empty($error)) {
     $embedding = 0;
     if ($pt->config->restrict_embedding_system == 'on' && !empty($_POST['embedding']) && $_POST['embedding'] == 'yes') {
         $embedding = 1;
     }
-    $file     = $getID3->analyze($_POST['video-location']);
+    $file     = array();
     $duration = '00:00';
-    if (!empty($file['playtime_string']) ) {
-        $duration = PT_Secure($file['playtime_string']);
+    if ($is_mux) {
+        if (!empty($mux_row) && !empty($mux_row->duration)) {
+            $duration = PT_MuxDurationText($mux_row->duration);
+        }
+    } else {
+        $file = $getID3->analyze($_POST['video-location']);
+        if (!empty($file['playtime_string']) ) {
+            $duration = PT_Secure($file['playtime_string']);
+        }
     }
     if ($pt->config->shorts_system == 'on' && !empty($_POST['is_short']) && $_POST['is_short'] == 'yes') {
         if (!empty($file) && !empty($file['playtime_seconds']) && $file['playtime_seconds'] > $pt->config->shorts_duration) {
@@ -97,9 +127,13 @@ if (empty($error)) {
             exit();
         }
     }
-    PT_UploadToS3(PT_Secure($_POST['video-location'], 0));
+    if (!$is_mux) {
+        PT_UploadToS3(PT_Secure($_POST['video-location'], 0));
+    }
 
-    if (!empty($file['filesize'])) {
+    if ($is_mux && !empty($mux_row)) {
+        $filesize = (int) $mux_row->file_size;
+    } elseif (!empty($file['filesize'])) {
         $filesize = $file['filesize'];
     }
 
@@ -261,7 +295,7 @@ if (empty($error)) {
             'description' => $video_description,
             'tags' => PT_Secure($_POST['tags'],1),
             'duration' => $duration,
-            'video_location' => PT_Secure($_POST['video-location'], 0),
+            'video_location' => $is_mux ? '' : PT_Secure($_POST['video-location'], 0),
             'category_id' => $category_id,
             'thumbnail' => $thumbnail,
             'is_short' => $is_short,
@@ -298,9 +332,17 @@ if (empty($error)) {
             $data_insert['monetization'] = PT_Secure($_POST['monetization']);
         }
     }
+    if ($is_mux) {
+        $data_insert['converted'] = 0; // playable only once Mux reports the asset ready
+    }
     $insert      = $db->insert(T_VIDEOS, $data_insert);
 
     if ($insert) {
+        if ($is_mux && !empty($mux_row)) {
+            $db->where('id', $mux_row->id)->update(T_MUX_VIDEOS, array('video_id' => $video_id, 'updated_at' => time()));
+            $fresh_mux = PT_MuxRowBy('id', $mux_row->id);
+            PT_MuxSyncVideoRecord(PT_MuxSyncRow($fresh_mux));
+        }
         if ($video_privacy == 0) {
             pt_push_channel_notifiations($video_id);
         }

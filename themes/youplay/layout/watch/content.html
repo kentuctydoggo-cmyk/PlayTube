@@ -234,6 +234,11 @@
                         {{LANG this_video_porcessing}}
                         <?php endif; ?>
                         <?php } ?>
+                        <?php if (!empty($pt->mux_failed) && !empty($pt->video_owner)) { ?>
+                        <p style="color:#e22e40;margin-top:8px">
+                           <?php echo htmlspecialchars(!empty($pt->mux_row->error_message) ? $pt->mux_row->error_message : 'Mux could not process this video. Please delete it and upload again.'); ?>
+                        </p>
+                        <?php } ?>
                      </h5>
                   </div>
                </div>
@@ -1401,6 +1406,36 @@
 <script src="{{CONFIG theme_url}}/player/js/video_js/videojs-resolution-switcher.js"></script>
 <script src="{{CONFIG theme_url}}/player/js/video_js/videojs.ima.js"></script>
 <?php } ?>
+<?php if (!empty($pt->video_owner) && (!empty($pt->mux_pending) || !empty($pt->mux_failed))) { ?>
+<script type="text/javascript">
+   (function () {
+      var tries = 0;
+      function checkMux() {
+         $.getJSON('{{LINK aj/mux-status}}?hash=' + $('.main_session').val() + '&video_id=' + encodeURIComponent('<?php echo $get_video->video_id; ?>'))
+            .done(function (data) {
+               if (data && data.state === 'ready') {
+                  window.location.reload();
+                  return;
+               }
+               if (data && data.state === 'failed') {
+                  if (!$('#mux-failed').length) {
+                     $('.pt_vdo_plyr').first().before('<div id="mux-failed" class="alert alert-danger" style="margin:10px 0">' + $('<div>').text(data.message || 'Mux could not process this video.').html() + '</div>');
+                  }
+                  return;
+               }
+               if (++tries < 180) { setTimeout(checkMux, 5000); }
+            })
+            .fail(function () {
+               if (++tries < 180) { setTimeout(checkMux, 8000); }
+            });
+      }
+      <?php if (!empty($pt->mux_pending)) { ?>setTimeout(checkMux, 4000);<?php } else { ?>checkMux();<?php } ?>
+   })();
+</script>
+<?php } ?>
+<?php if (!empty($pt->get_video->video_location) && strpos($pt->get_video->video_location, '.m3u8') !== false) { ?>
+<script src="{{CONFIG theme_url}}/player/js/hls.min.js"></script>
+<?php } ?>
 <?php if (empty($pt->get_video->facebook) && empty($pt->get_video->vimeo) && empty($pt->get_video->daily)) { ?>
 <script type="text/javascript">
    function go_to_duration(duration) {
@@ -2486,5 +2521,36 @@
    gtag('js', new Date());
    
    gtag('config', '<?php echo($pt->get_video->owner->google_tracking_code) ?>');
+</script>
+<?php } ?>
+
+<?php if (!empty($pt->get_video->video_location) && strpos($pt->get_video->video_location, '.m3u8') !== false) { ?>
+<script type="text/javascript">
+   /* Mux playback. Chrome answers "maybe" to canPlayType('application/x-mpegURL'), so
+      mediaelement picks its native renderer and never fetches the HLS playlist. Feed the
+      very same <video> element with hls.js instead: the existing player, its controls and
+      the page layout are untouched. */
+   window.PT_MUX_HLS_URL = <?php echo json_encode($pt->get_video->video_location); ?>;
+   jQuery(function ($) {
+      setTimeout(function () {
+         var el = document.querySelector('video');
+         if (!el || !window.Hls || !window.Hls.isSupported() || typeof window.PT_MUX_HLS_URL !== 'string') {
+            return;
+         }
+         if (el.getAttribute('data-mux-hls') === '1') {
+            return;
+         }
+         el.setAttribute('data-mux-hls', '1');
+         el.removeAttribute('src');
+         var hls = new window.Hls({enableWorker: true});
+         hls.on(window.Hls.Events.ERROR, function (event, data) {
+            if (data && data.fatal) {
+               console.error('Mux playback error:', data.type, data.details);
+            }
+         });
+         hls.loadSource(window.PT_MUX_HLS_URL);
+         hls.attachMedia(el);
+      }, 0);
+   });
 </script>
 <?php } ?>

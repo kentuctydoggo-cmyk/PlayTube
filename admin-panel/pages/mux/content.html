@@ -1,0 +1,247 @@
+<div class="container-fluid">
+    <div>
+        <h3>Mux Video Setup</h3>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="#">Admin Panel</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Mux Video Setup</li>
+            </ol>
+        </nav>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-7">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Connection status</h6>
+                    <div id="mux-status-alert"></div>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <tbody>
+                                <tr>
+                                    <td>Secrets present</td>
+                                    <td id="mux-configured">—</td>
+                                </tr>
+                                <tr>
+                                    <td>Connection</td>
+                                    <td id="mux-connected">—</td>
+                                </tr>
+                                <tr>
+                                    <td>Token ID</td>
+                                    <td id="mux-token-hint">—</td>
+                                </tr>
+                                <tr>
+                                    <td>Last verified</td>
+                                    <td id="mux-checked">—</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <button type="button" class="btn btn-warning" id="mux-recheck">Re-check connection</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Enter your Mux API credentials</h6>
+                    <p class="text-muted">
+                        Paste the Token ID and Secret Key from your Mux dashboard
+                        (Settings → Access Tokens). They are sent to this server only to be
+                        validated against the Mux API — this form never saves them to the
+                        website database, the browser or the source code.
+                    </p>
+                    <div id="mux-form-alert"></div>
+                    <form class="mux-credentials" onsubmit="return false;">
+                        <div class="form-group form-float">
+                            <div class="form-line">
+                                <label class="form-label">MUX_TOKEN_ID</label>
+                                <input type="text" id="mux-token-id" name="token_id" class="form-control"
+                                       autocomplete="off" spellcheck="false" placeholder="Token ID">
+                            </div>
+                        </div>
+                        <div class="form-group form-float">
+                            <div class="form-line">
+                                <label class="form-label">MUX_TOKEN_SECRET</label>
+                                <input type="password" id="mux-token-secret" name="token_secret" class="form-control"
+                                       autocomplete="new-password" spellcheck="false" placeholder="Secret Key">
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-primary" id="mux-save">Save and Connect to Mux</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-5">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Where the credentials are stored</h6>
+                    <p>
+                        Website code can read Base44 secrets but cannot write them, so the two values
+                        are stored in Base44, not in this database:
+                    </p>
+                    <ol>
+                        <li>Open <strong>Base44 → Secrets</strong> for this app.</li>
+                        <li>Add a secret named <code>MUX_TOKEN_ID</code> and paste the Token ID.</li>
+                        <li>Add a secret named <code>MUX_TOKEN_SECRET</code> and paste the Secret Key.</li>
+                        <li>Save. Base44 recreates the app with the secrets available, then come back
+                            here and press <strong>Re-check connection</strong>.</li>
+                    </ol>
+                    <div id="mux-copy-panel" class="alert alert-info" style="display:none">
+                        <p class="mb-2"><strong>Your values are valid.</strong> Copy them into Base44 → Secrets now:</p>
+                        <div class="mb-2">
+                            <label class="text-muted mb-1">MUX_TOKEN_ID</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="mux-copy-id" readonly>
+                                <div class="input-group-append">
+                                    <button class="btn btn-outline-secondary" type="button" id="mux-copy-id-btn">Copy</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="text-muted mb-1">MUX_TOKEN_SECRET</label>
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="mux-copy-secret" readonly>
+                                <div class="input-group-append">
+                                    <button class="btn btn-outline-secondary" type="button" id="mux-copy-secret-btn">Copy</button>
+                                </div>
+                            </div>
+                        </div>
+                        <small>This panel disappears as soon as this page is reloaded.</small>
+                    </div>
+                    <p class="text-muted mb-0">
+                        No webhooks are required: Mux processing status is read by polling from the
+                        server, so nothing has to be configured in the Mux dashboard.
+                    </p>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Upload limits</h6>
+                    <p class="text-muted mb-0">
+                        No storage quota or video-count limit is applied by this application. Library
+                        growth is bounded only by your Mux plan (usage-based billing and Mux's own
+                        per-upload limits). Failed uploads are never published as playable videos and
+                        nothing is deleted automatically.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="text/javascript">
+    $(function () {
+        var MUX_HASH = '<?php echo !empty($_SESSION['main_hash_id']) ? $_SESSION['main_hash_id'] : ''; ?>';
+        var MUX_URL = '{{LINK aj/mux-settings}}?hash=' + encodeURIComponent(MUX_HASH);
+
+        function text(value, fallback) {
+            if (typeof value === 'string' && value !== '' && value !== 'undefined' && value !== 'null') {
+                return value;
+            }
+            return fallback || '';
+        }
+
+        function show(html) {
+            $('#mux-status-alert').html(html);
+        }
+
+        function render(status) {
+            if (!status) { return; }
+            $('#mux-configured').html(status.configured
+                ? '<span class="badge badge-success">Yes</span>'
+                : '<span class="badge badge-danger">No</span>');
+            $('#mux-connected').html(status.connected
+                ? '<span class="badge badge-success">Connected</span>'
+                : '<span class="badge badge-warning">Needs configuration</span>');
+            $('#mux-token-hint').text(text(status.token_id_hint, 'not set'));
+            if (status.checked_at) {
+                var when = new Date(status.checked_at * 1000);
+                $('#mux-checked').text(when.toLocaleString());
+            } else {
+                $('#mux-checked').text('never');
+            }
+            if (status.connected) {
+                show('<div class="alert alert-success"><i class="fa fa-check"></i> ' + $('<div>').text(text(status.message, 'Connected to Mux.')).html() + '</div>');
+            } else if (!status.configured) {
+                show('<div class="alert alert-warning">' + $('<div>').text(text(status.message, 'Add the credentials in Base44 → Secrets.')).html() + '</div>');
+            } else {
+                show('<div class="alert alert-danger">' + $('<div>').text(text(status.message, 'Mux rejected the credentials.')).html() + '</div>');
+            }
+        }
+
+        function loadStatus(verify) {
+            $.getJSON(MUX_URL + '&action=' + (verify ? 'test' : 'status'), function (data) {
+                render(data && data.mux ? data.mux : null);
+            }).fail(function (xhr) {
+                show('<div class="alert alert-danger">Could not reach the server (HTTP ' + xhr.status + ').</div>');
+            });
+        }
+
+        $('#mux-recheck').on('click', function () {
+            $(this).text('Checking…').attr('disabled', true);
+            loadStatus(true);
+            setTimeout(function () { $('#mux-recheck').text('Re-check connection').attr('disabled', false); }, 2000);
+        });
+
+        $('#mux-save').on('click', function () {
+            var id = $.trim($('#mux-token-id').val());
+            var secret = $.trim($('#mux-token-secret').val());
+            if (!id || !secret) {
+                $('#mux-form-alert').html('<div class="alert alert-warning">Enter both the Token ID and the Secret Key.</div>');
+                return;
+            }
+            $(this).text('Connecting…').attr('disabled', true);
+            $.ajax({
+                url: MUX_URL + '&action=verify',
+                type: 'POST',
+                dataType: 'json',
+                data: {token_id: id, token_secret: secret}
+            }).done(function (data) {
+                var message = $('<div>').text(text(data && data.message, 'Could not verify the credentials.')).html();
+                if (data && data.valid) {
+                    $('#mux-form-alert').html('<div class="alert alert-success"><i class="fa fa-check"></i> ' + message + '</div>');
+                    $('#mux-copy-panel').show();
+                    $('#mux-copy-id').val(id);
+                    $('#mux-copy-secret').val(secret);
+                    $('#mux-token-id').val('');
+                    $('#mux-token-secret').val('');
+                    if (data.env) { render(data.env); }
+                    // Base44 recreates the app after secrets land; poll until it answers.
+                    var tries = 0;
+                    var timer = setInterval(function () {
+                        tries++;
+                        $.getJSON(MUX_URL + '&action=test', function (res) {
+                            if (res && res.mux && res.mux.connected) {
+                                clearInterval(timer);
+                                $('#mux-copy-panel').hide();
+                                render(res.mux);
+                            }
+                        });
+                        if (tries > 30) { clearInterval(timer); }
+                    }, 8000);
+                } else {
+                    $('#mux-form-alert').html('<div class="alert alert-danger">' + message + '</div>');
+                    $('#mux-copy-panel').hide();
+                }
+            }).fail(function (xhr) {
+                $('#mux-form-alert').html('<div class="alert alert-danger">Could not reach the server (HTTP ' + xhr.status + ').</div>');
+            }).always(function () {
+                $('#mux-save').text('Save and Connect to Mux').attr('disabled', false);
+            });
+        });
+
+        $('#mux-copy-id-btn').on('click', function () {
+            $('#mux-copy-id').select();
+            document.execCommand('copy');
+        });
+        $('#mux-copy-secret-btn').on('click', function () {
+            $('#mux-copy-secret').attr('type', 'text').select();
+            document.execCommand('copy');
+            $('#mux-copy-secret').attr('type', 'password');
+        });
+
+        loadStatus(false);
+    });
+</script>

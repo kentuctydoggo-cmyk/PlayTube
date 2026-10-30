@@ -72,5 +72,7 @@ define('T_HASHTAGS', 'hashtags');
 define('T_MANAGE_PRO', 'manage_pro');
 define('T_DASHBOARD_REPORTS', 'dashboard_reports');
 define('T_BACKUP_CODES', 'backup_codes');
+define('T_MUX_VIDEOS', 'mux_videos');
+define('T_MUX_STATE', 'mux_state');
 
 ?>

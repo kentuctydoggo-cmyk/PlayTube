@@ -48,6 +48,13 @@
 		</div>
 
 		<div id="upload-video" style="visibility: hidden;">
+            <?php if (PT_IsAdmin() && !PT_MuxIsConfigured()) { ?>
+            <div class="alert alert-warning" style="margin-bottom:15px">
+               <strong>Mux isn’t connected.</strong> Uploads are stored on this server until you add
+               <code>MUX_TOKEN_ID</code> and <code>MUX_TOKEN_SECRET</code> in Base44 → Secrets.
+               <a href="<?php echo PT_LoadAdminLinkSettings('mux'); ?>">Open Mux setup</a>
+            </div>
+            <?php } ?>
             <input type="file" name="video" accept="video/*" class="upload-video-file" id="pick-files">
          </div>
 
@@ -377,6 +384,8 @@
 				</div>
 				<input type="hidden" name="video-location" id="video-location" value="">
 				<input type="hidden" name="uploaded_id" id="uploaded_id" value="">
+                <input type="hidden" name="mux_upload_id" id="mux_upload_id" value="">
+                <input type="hidden" name="mux_client_key" id="mux_client_key" value="">
 				<?php if ($pt->is_short) { ?>
                <input type="hidden" name="is_short" value="yes">
                <?php } ?>
@@ -607,6 +616,13 @@ $(function () {
       };
    }
 
+   var PT_MUX_UPLOAD = {
+      enabled: <?php echo PT_MuxIsConfigured() ? 'true' : 'false'; ?>,
+      createUrl: '{{LINK aj/mux-create-upload}}',
+      statusUrl: '{{LINK aj/mux-status}}',
+      allow: ['mp4', 'mov', 'm4v', 'webm']
+   };
+
    var bar         = $('.bar');
    var percent     = $('.percent');
    var prcsvdo    = $('.pt_prcs_vdo');
@@ -668,6 +684,10 @@ $(function () {
                <?php if ($pt->user->admin == 1) { ?>$('.upload_msg').addClass('hidden');<?php } ?>
            },
            FilesAdded: function (up, files) {
+               if (PT_MUX_UPLOAD.enabled) {
+                   ptMuxStart(files[0].getNative());
+                   return;
+               }
                uploader.start();
            },
            UploadProgress: function (up, file) {
@@ -694,7 +714,11 @@ $(function () {
                $('#upload-form').removeClass('hidden');
                $('.upload').addClass('hidden');
                $('#upload-video').submit();
-               data = JSON.parse(result.response);
+               try {
+                  data = JSON.parse(result.response);
+               } catch (e) {
+                  data = null;
+               }
                percentVal = '0%';
    	    	bar.width(percentVal);
             $('.progress').addClass('hidden');
@@ -755,11 +779,180 @@ $(function () {
                });
             }
             else {
-				Snackbar.show({showAction: false,backgroundColor: '#e22e40',text: '<div>'+ data.error +'</div>'});
+				Snackbar.show({showAction: false,backgroundColor: '#e22e40',text: '<div>'+ ptMuxText(data, 'Upload failed. Please try again.') +'</div>'});
             }
        }
    }
    });
+   /* Mux direct upload: the browser PUTs the file straight to Mux with progress,
+      then PHP polls Mux for the processing status (no webhooks). */
+   var ptMux = { busy: false, clientKey: '', uploadId: '', timer: null, pollTries: 0 };
+
+   function ptMuxText(data, fallback) {
+      var msg = '';
+      if (data && typeof data === 'object') {
+         if (typeof data.message === 'string' && data.message !== '') {
+            msg = data.message;
+         } else if (typeof data.error === 'string' && data.error !== '') {
+            msg = data.error;
+         }
+      }
+      if (!msg || msg === 'undefined' || msg === 'null') {
+         msg = fallback || 'Upload failed. Please try again.';
+      }
+      return $('<div>').text(msg).html();
+   }
+
+   function ptMuxNewKey() {
+      return 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+   }
+
+   function ptMuxProgress(pct) {
+      var value = Math.max(0, Math.min(100, Math.round(pct))) + '%';
+      bar.width(value);
+      percent.html(value);
+   }
+
+   function ptMuxFail(message) {
+      ptMux.busy = false;
+      $('.progress').addClass('hidden');
+      $('.upload').removeClass('hidden');
+      Snackbar.show({showAction: false, backgroundColor: '#e22e40', text: '<div>' + message + '</div>'});
+   }
+
+   function ptMuxMime(file, ext) {
+      var map = {mp4: 'video/mp4', m4v: 'video/x-m4v', mov: 'video/quicktime', webm: 'video/webm'};
+      var type = (file.type || '').toLowerCase();
+      if (!type || type === 'application/octet-stream') {
+         type = map[ext] || 'video/mp4';
+      }
+      return type;
+   }
+
+   function ptMuxStart(file) {
+      if (!file) { ptMuxFail('No file was selected. Please pick the video again.'); return; }
+      if (ptMux.busy) { return; }
+      var name = file.name || 'video.mp4';
+      var ext  = name.indexOf('.') === -1 ? '' : name.split('.').pop().toLowerCase();
+      if (PT_MUX_UPLOAD.allow.indexOf(ext) === -1) {
+         ptMuxFail('Unsupported file type ".' + ext + '". Upload MP4, MOV, M4V or WebM.');
+         return;
+      }
+      if (!file.size) {
+         ptMuxFail('That file is empty. Please choose a different video.');
+         return;
+      }
+      ptMux.busy = true;
+      ptMux.pollTries = 0;
+      ptMux.uploadId = '';
+      ptMux.clientKey = ptMuxNewKey();
+      $('#mux_upload_id').val('');
+      $('#mux_client_key').val(ptMux.clientKey);
+      $('.progress').removeClass('hidden');
+      $('.upload').addClass('hidden');
+      prcsvdo.html('');
+      ptMuxProgress(0);
+      $.ajax({
+         url: PT_MUX_UPLOAD.createUrl + '?hash=' + $('.main_session').val(),
+         type: 'POST',
+         dataType: 'json',
+         data: {name: name, type: ptMuxMime(file, ext), size: file.size, client_key: ptMux.clientKey}
+      }).done(function (data) {
+         var status = parseInt((data && data.status) || 0, 10);
+         if (status !== 200 || !data || !data.upload_url) {
+            ptMuxFail(ptMuxText(data, 'Mux could not start this upload. Please try again.'));
+            return;
+         }
+         ptMux.uploadId = data.upload_id || '';
+         ptMux.clientKey = data.client_key || ptMux.clientKey;
+         $('#mux_client_key').val(ptMux.clientKey);
+         ptMuxSend(file, ptMuxMime(file, ext), data.upload_url);
+      }).fail(function (xhr) {
+         ptMuxFail(ptMuxText(xhr.responseJSON, 'Could not reach the server to start the upload (HTTP ' + xhr.status + ').'));
+      });
+   }
+
+   function ptMuxSend(file, type, url) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('PUT', url, true);
+      // Mux expects the raw file body: no multipart boundary here.
+      xhr.setRequestHeader('Content-Type', type);
+      xhr.upload.onprogress = function (event) {
+         if (event.lengthComputable) {
+            ptMuxProgress(event.loaded / event.total * 95);
+         }
+      };
+      xhr.onload = function () {
+         ptMux.busy = false;
+         if (xhr.status >= 200 && xhr.status < 300) {
+            ptMuxProgress(100);
+            ptMuxUploaded(file);
+         } else {
+            ptMuxFail('Mux rejected the upload (HTTP ' + xhr.status + '). Nothing was published — please retry.');
+         }
+      };
+      xhr.onerror = function () {
+         ptMux.busy = false;
+         ptMuxFail('The connection to Mux was interrupted before the upload finished. Please retry.');
+      };
+      xhr.send(file);
+   }
+
+   function ptMuxUploaded(file) {
+      var label = (file.name || 'video').replace(/\.[^.]+$/, '');
+      $('#mux_upload_id').val(ptMux.uploadId);
+      $('#video-location').val('');
+      $('#uploaded_id').val('');
+      $('#title').val(label);
+      <?php if (PT_IsAdmin()) { ?>
+      $('#movie_title').val(label);
+      <?php } ?>
+      $('.file_name').html(label);
+      $('.upload-video-file').val('');
+      $('.progress').addClass('hidden');
+      $('.upload').addClass('hidden');
+      $('.pt_upvid_one').slideUp();
+      $('.pt_upvid_two').slideDown();
+      $('.pt_upload_vdo_step').addClass('step-two-active');
+      if (!$('#mux_status').length) {
+         $('.file_name').after('<div id="mux_status" style="margin-top:6px"></div>');
+      }
+      $('#mux_status').html('<span style="color:#888">Uploaded. Mux is processing…</span>');
+      $('#submit-btn').attr('disabled', false);
+      Snackbar.show({showAction: false, pos: 'bottom-center', text: label + ' {{LANG successfully_uplaoded}}'});
+      ptMuxPoll(0);
+   }
+
+   function ptMuxPoll(delay) {
+      if (!ptMux.clientKey) { return; }
+      clearTimeout(ptMux.timer);
+      ptMux.timer = setTimeout(function () {
+         $.ajax({
+            url: PT_MUX_UPLOAD.statusUrl + '?hash=' + $('.main_session').val() + '&client_key=' + encodeURIComponent(ptMux.clientKey),
+            dataType: 'json'
+         }).done(function (data) {
+            var state = (data && data.state) || '';
+            ptMux.pollTries = 0;
+            if (state === 'ready') {
+               $('#mux_status').html('<span style="color:#39a745">Ready to play.</span>');
+               return;
+            }
+            if (state === 'failed') {
+               $('#mux_status').html('<span style="color:#e22e40">' + ptMuxText(data, 'Mux could not process this video.') + '</span>');
+               $('#submit-btn').attr('disabled', true);
+               return;
+            }
+            $('#mux_status').html('<span style="color:#888">' + ptMuxText(data, 'Mux is processing…') + '</span>');
+            ptMuxPoll((data && data.poll_after_ms) ? data.poll_after_ms : 4000);
+         }).fail(function () {
+            ptMux.pollTries = (ptMux.pollTries || 0) + 1;
+            if (ptMux.pollTries < 10) {
+               ptMuxPoll(5000);
+            }
+         });
+      }, delay);
+   }
+
    uploader.init();
 
 	$('#upload-form form').ajaxForm({

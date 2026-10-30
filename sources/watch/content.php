@@ -1092,6 +1092,17 @@ if ($get_video->owner->privacy->who_can_watch_my_videos == 'subscribers') {
         }
     }
 }
+// Mux: the tracking row is the source of truth for processing state (no webhooks).
+// A pending asset keeps converted != 1, which already drives the app's processing UI.
+$pt->mux_row     = null;
+$pt->mux_pending = false;
+$pt->mux_failed  = false;
+$_pt_mux_row     = PT_MuxRowBy('video_id', $get_video->video_id);
+if (!empty($_pt_mux_row)) {
+    $pt->mux_row     = $_pt_mux_row;
+    $pt->mux_pending = !in_array($_pt_mux_row->status, array('ready', 'failed'), true);
+    $pt->mux_failed  = ($_pt_mux_row->status === 'failed');
+}
 if ($pt->get_video->converted != 1) {
     $pt->in_queue = true;
     $pt->converted = false;

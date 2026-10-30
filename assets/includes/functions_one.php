@@ -970,6 +970,14 @@ function PT_DeleteVideo($id = 0) {
     }
 
     $get_video = $db->where('id', $id)->getOne(T_VIDEOS);
+
+    // Mux assets are removed here and only here: an explicit owner/admin delete.
+    // Nothing in the application deletes assets to reclaim storage.
+    $mux_row = PT_MuxRowBy('video_id', $get_video->video_id);
+    if (!empty($mux_row) && !empty($mux_row->asset_id)) {
+        PT_MuxDeleteAsset($mux_row->asset_id);
+    }
+
     if (strpos($get_video->thumbnail, 'upload/photos') !== false) {
         if ($get_video->thumbnail != 'upload/photos/thumbnail.jpg') {
             if (file_exists($get_video->thumbnail)) {
@@ -1043,6 +1051,9 @@ function PT_DeleteVideo($id = 0) {
     }
 
     $delete = $db->where('id', $id)->delete(T_VIDEOS);
+    if (!empty($mux_row)) {
+        $db->where('id', $mux_row->id)->delete(T_MUX_VIDEOS);
+    }
     $user_ = $db->where('id', $get_video->user_id)->getOne(T_USERS);
     $size = $get_video->size;
     $db->where('id', $get_video->user_id)->update(T_USERS,array('uploads' => ($user_->uploads - $size)));

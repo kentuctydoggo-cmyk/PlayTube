@@ -12,3 +12,4 @@ session_start();
 require('assets/includes/functions_general.php');
 require('assets/includes/tables.php');
 require('assets/includes/functions_one.php');
+require('assets/includes/mux.php');

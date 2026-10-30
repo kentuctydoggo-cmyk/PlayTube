@@ -64,6 +64,10 @@ services:
       - SITE_URL=${SITE_URL:-}
       - PUBLIC_HOST_SUFFIX=${BASE44_PUBLIC_HOST_SUFFIX:-}
       - BASE44_PREVIEW_MODE
+    # Platform-managed secrets (MUX_TOKEN_ID, MUX_TOKEN_SECRET). Last, so dashboard
+    # values always win over anything else.
+    env_file:
+      - /run/base44/app.env
     volumes:
       - .:/var/www/html
       - ./php.ini:/usr/local/etc/php/php.ini:ro

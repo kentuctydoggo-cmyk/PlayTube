@@ -124,5 +124,20 @@ if (!empty($_FILES['video']['tmp_name'])) {
     else if (!empty($file_upload['error'])) {
         $data = array('status' => 400, 'error' => $file_upload['error']);
     }
+    else {
+        // PT_ShareFile returns an empty array when the move/append failed; the browser used
+        // to stringify the missing `error` field and show the literal word "undefined".
+        $data = array('status' => 400, 'error' => 'The file could not be stored on this server. Please check the upload folder permissions and retry.');
+    }
 }
+else {
+    // No file in the request: the POST was dropped (too large for the server limits) or the
+    // connection was interrupted mid-upload.
+    $data = array('status' => 400, 'error' => 'No video was received by the server. The connection may have dropped or the file exceeded the server limit — please retry.');
+}
+
+if (!is_array($data) || empty($data['status'])) {
+    $data = array('status' => 400, 'error' => 'The upload could not be completed. Please retry.');
+}
+// ajax.php prints $data once the file returns.
 ?>
