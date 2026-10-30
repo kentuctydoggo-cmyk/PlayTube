@@ -62,6 +62,15 @@ first successful sign-in).
   label is hardcoded in the template rather than added as a `langs` row.
 - Payment gateways, SMTP and social-login credentials are in-app admin settings (stored in
   the `config` table), not environment variables. No external secret is required to boot.
+- **Mux Video stores new uploads; credentials are environment secrets only.** The browser PUTs the
+  file straight to Mux with a presigned URL (`ajax/mux-create-upload.php`), PHP never proxies the
+  bytes, and processing progress comes from server-side polling of the Mux API
+  (`ajax/mux-status.php` → `PT_MuxSyncRow`) — there are no webhooks. Tokens are read with
+  `getenv('MUX_TOKEN_ID')` / `getenv('MUX_TOKEN_SECRET')` from `/run/base44/app.env` (compose
+  `env_file`, listed last); they are never written to the `config` table, returned by an endpoint
+  or logged, and the admin screen only shows a masked hint. Tracking lives in the additive
+  `mux_videos` / `mux_state` tables. The admin screen is `/admin-cp/mux`; "Re-check connection"
+  hits Mux live. Without the two secrets the app still boots — only Mux uploads are disabled.
 - **Upload limits are `config` rows, not just php.ini.** `max_upload` is the per-file limit
   (seeded 10GB) and `max_upload_all_users` / `max_upload_free_users` / `max_upload_pro_users`
   are per-user storage quotas where `0` means unlimited (seeded `0`). `chunk_size` (24MB)

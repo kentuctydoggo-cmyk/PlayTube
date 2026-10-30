@@ -2,5 +2,16 @@
   "previewPort": 3000,
   "healthPath": "/",
   "startCommand": "docker compose -f docker-compose.base44.yml up -d",
-  "secrets": []
+  "secrets": [
+    {
+      "name": "MUX_TOKEN_ID",
+      "description": "Mux Video API access token ID (Mux dashboard → Settings → API Access Tokens). Needed for uploads and playback.",
+      "requiredAtBoot": false
+    },
+    {
+      "name": "MUX_TOKEN_SECRET",
+      "description": "Mux Video API secret key that pairs with MUX_TOKEN_ID. Needed for uploads and playback.",
+      "requiredAtBoot": false
+    }
+  ]
 }
